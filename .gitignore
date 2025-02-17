@@ -1,2 +1,10 @@
-CDM_project
+**/__pycache__/
+*.pyc
+*.pyo
+
 spine-venv
+
+datasets
+outputs
+
+*.png

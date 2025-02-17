@@ -4,11 +4,15 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
 from .cyclegan import Generator
+from .pix2pix import GeneratorUNet
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 import lpips
+from torch.utils.data import DataLoader
+from .utils import MRIDataset
+import argparse
 
 def torch_psnr(img1, img2):
     """ Compute PSNR in PyTorch """
@@ -81,10 +85,6 @@ def torch_lpips(img1, img2, loss_fn):
     return lpips_value.mean().item()
 
 if __name__ == "__main__":
-    from torch.utils.data import DataLoader
-    from .utils import MRIDataset
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--device_num", type=str, default="1")
     parser.add_argument("--model_dir", type=str, default="/data/model/pix2pix/spine/gtu/G_t1_t2.pth")

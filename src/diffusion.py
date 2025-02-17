@@ -779,7 +779,7 @@ if __name__ == "__main__":
     dataset_name = args.data_dir.split('/')[-2]
 
     if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
-        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name))
+        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name), exist_ok=True)
 
     # save model
     torch.save(model.state_dict(), os.path.join(args.save_dir, model_type, subject_name, dataset_name, f'model_{args.original_modal}_{args.target_modal}.pth'))
