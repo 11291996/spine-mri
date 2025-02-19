@@ -11,6 +11,7 @@ import numpy
 from PIL import Image
 from ..utils import MRIDataset
 import argparse
+from ..logger import TrainLogger
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--device_num", type=str, default="1")
@@ -38,7 +39,7 @@ subject_name = args.model_dir.split("/")[-3]
 dataset_name = args.model_dir.split("/")[-2]
 
 data_dir = os.path.join(args.datasets_dir, subject_name, dataset_name, "test")
-
+ 
 test_dataset = MRIDataset(data_dir, original_modal, target_modal)
 test_loader = DataLoader(dataset=test_dataset, num_workers=4, pin_memory=True, batch_size=args.batch_size, shuffle=False)
 
@@ -49,6 +50,8 @@ save_dir = args.model_dir.split("/")[:-4]
 save_dir = '/'.join(save_dir)
 
 model_type = 'cdm'
+logger = TrainLogger(os.path.join(save_dir, model_type, subject_name, dataset_name), prefix=f"score_{original_modal}_{target_modal}")
+   
 
 mdn_model_path = os.path.join(save_dir, model_type, subject_name, dataset_name, f'mdn_{original_modal}_{target_modal}.pth')
 mdn_model.load_state_dict(torch.load(mdn_model_path))
@@ -86,12 +89,12 @@ for i, (original_images, target_images) in enumerate(test_loader):
     lpips_score += torch_lpips(sampled_images.cuda(), target_images.cuda(), loss_fn)
     count += 1
 
-    print(f"Average PSNR: {psnr / count:.4f}")
-    print(f"Average SSIM: {ssim / count:.4f}")
-    print(f"Average MAE: {mae / count:.6f}")
-    print(f"Average LPIPS: {lpips_score / count:.4f}")
+    # print(f"Average PSNR: {psnr / count:.4f}")
+    # print(f"Average SSIM: {ssim / count:.4f}")
+    # print(f"Average MAE: {mae / count:.6f}")
+    # print(f"Average LPIPS: {lpips_score / count:.4f}")
 
-print(f"Average PSNR: {psnr / count:.4f}")
-print(f"Average SSIM: {ssim / count:.4f}")
-print(f"Average MAE: {mae / count:.6f}")
-print(f"Average LPIPS: {lpips_score / count:.4f}")
+logger.log(f"Average PSNR: {psnr / count:.4f}")
+logger.log(f"Average SSIM: {ssim / count:.4f}")
+logger.log(f"Average MAE: {mae / count:.6f}")
+logger.log(f"Average LPIPS: {lpips_score / count:.4f}")

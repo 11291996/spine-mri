@@ -8,6 +8,10 @@ import torch
 import numpy as np
 import torch.nn as nn
 import argparse
+from torch.utils.data import DataLoader
+from .utils import MRIDataset
+from torch import optim
+from .logger import TrainLogger
 
 class UNetDown(nn.Module):
     def __init__(self, in_channels, out_channels, normalize=True, dropout=0.0):
@@ -71,7 +75,7 @@ class GeneratorUNet(nn.Module):
         self.up7 = UNetUp(256,64)
         self.up8 = nn.Sequential(
             nn.ConvTranspose2d(128,out_channels,4,stride=2,padding=1),
-            nn.Tanh()
+            # nn.Tanh()
         )
 
     def forward(self, x):
@@ -137,10 +141,6 @@ def initialize_weights(model):
         nn.init.normal_(model.weight.data, 0.0, 0.02)
 
 if __name__ == "__main__":
-    from torch.utils.data import DataLoader
-    from .utils import MRIDataset
-    from torch import optim
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--device_num", type=str, default="1")
     parser.add_argument("--data_dir", type=str, default="/data/datasets/spine/gtu/train")
@@ -155,10 +155,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model_type = "pix2pix"
-
+    subject_name = args.data_dir.split('/')[-3]
+    dataset_name = args.data_dir.split('/')[-2]
+    
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device_num
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    save_dir = os.path.join(args.save_dir, model_type, subject_name, dataset_name)
+    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
+        os.makedirs(save_dir, exist_ok=True)
+    
+    logger = TrainLogger(log_dir=save_dir, prefix=f"train_{args.original_modal}_{args.target_modal}")
+
 
     train_dataset = MRIDataset(args.data_dir, args.original_modal, args.target_modal)
     train_loader = DataLoader(dataset=train_dataset, num_workers=4, pin_memory=True, batch_size=args.batch_size, shuffle=True)
@@ -237,13 +245,7 @@ if __name__ == "__main__":
             loss_hist['gen'].append(g_loss.item())
             loss_hist['dis'].append(d_loss.item())
 
-            print('Epoch: %.0f, G_Loss: %.6f, D_Loss: %.6f, time: %.2f min' %(epoch, g_loss.item(), d_loss.item(), (time.time()-start_time)/60))
-
-    subject_name = args.data_dir.split('/')[-3]
-    dataset_name = args.data_dir.split('/')[-2]
-
-    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
-        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name), exist_ok=True)
+            logger.log('Epoch: %.0f, G_Loss: %.6f, D_Loss: %.6f, time: %.2f min' %(epoch, g_loss.item(), d_loss.item(), (time.time()-start_time)/60))
 
     # save model
     torch.save(model_gen.state_dict(), os.path.join(args.save_dir, model_type, subject_name, dataset_name, f'G_{args.original_modal}_{args.target_modal}.pth'))

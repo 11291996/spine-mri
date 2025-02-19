@@ -6,6 +6,12 @@ import os
 from .cdm.utils.mdn_model import timestep_embedding
 import math
 import matplotlib.pyplot as plt
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from einops import repeat
+from .utils import MRIDataset
+import argparse
+from .logger import TrainLogger
 
 class DDIMSampler:
     def __init__(self, model, num_ddim_steps=50, eta=0.0):
@@ -645,35 +651,41 @@ class MendeleySAGMidDataset(data.Dataset):
         return self.len
 
 if __name__ == "__main__":
-    import torch.optim as optim
-    from torch.utils.data import DataLoader
-    from einops import repeat
-    from .utils import MRIDataset
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--device_num", type=str, default="1")
     parser.add_argument("--data_dir", type=str, default="/data/datasets/spine/gtu/train")
     parser.add_argument("--original_modal", type=str, default="t1")
     parser.add_argument("--target_modal", type=str, default="t2")
     parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--beta1", type=float, default=0.5)
     parser.add_argument("--beta2", type=float, default=0.999)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--save_dir", type=str, default="/data/model")
+    parser.add_argument("--backbone", type=str, default="")
     args = parser.parse_args()
 
-    model_type = "diffusion"
-
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device_num
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    model_type = "diffusion"
+    subject_name = args.data_dir.split('/')[-3]
+    dataset_name = args.data_dir.split('/')[-2]
+
+    save_dir = os.path.join(args.save_dir, model_type, subject_name, dataset_name)
+    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
+        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name), exist_ok=True)
+
+    logger = TrainLogger(log_dir=save_dir, prefix=f"train_{args.original_modal}_{args.target_modal}")
 
     # Initialize Model and DDIM Sampler
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DDIMUNet(image_size=256, in_channels=2,
                   model_channels=96, out_channels=2, 
                   num_res_blocks=1, attention_resolutions=[32,16,8],
                   channel_mult=[1, 2, 4, 8]).to(device)
+    
+    if args.backbone:
+        model.load_state_dict(torch.load(args.backbone))
 
     # Move model parameters to the same device
     for param in model.parameters():
@@ -686,6 +698,12 @@ if __name__ == "__main__":
     # Dummy dataset of random grayscale (1,1,256,256) images
     from tqdm import tqdm
     train_dataset = MRIDataset(args.data_dir, args.original_modal, args.target_modal)
+    
+    # from torch.utils.data import random_split
+    # train_size = int(0.1 * len(train_dataset))
+    # val_size = len(train_dataset) - train_size 
+    # train_dataset, _ = random_split(train_dataset, [train_size, val_size])
+
     train_loader = DataLoader(dataset=train_dataset, num_workers=4, pin_memory=True, batch_size=args.batch_size, shuffle=True)
 
     # Training Loop with DDIM Sampling
@@ -730,6 +748,8 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+        logger.log(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
 
         # # Save the model after each epoch
         # if epoch % 10 == 0 and epoch > 0:
@@ -772,14 +792,6 @@ if __name__ == "__main__":
         #     # Save the image with minimal margin
         #     plt.savefig(f"diffusion_output_{epoch}.png", bbox_inches='tight', dpi=300)
         #     plt.close()
-
-        #     print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
-
-    subject_name = args.data_dir.split('/')[-3]
-    dataset_name = args.data_dir.split('/')[-2]
-
-    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
-        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name), exist_ok=True)
 
     # save model
     torch.save(model.state_dict(), os.path.join(args.save_dir, model_type, subject_name, dataset_name, f'model_{args.original_modal}_{args.target_modal}.pth'))

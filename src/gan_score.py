@@ -13,6 +13,7 @@ import lpips
 from torch.utils.data import DataLoader
 from .utils import MRIDataset
 import argparse
+from .logger import TrainLogger
 
 def torch_psnr(img1, img2):
     """ Compute PSNR in PyTorch """
@@ -104,7 +105,11 @@ if __name__ == "__main__":
     dataset_name = args.model_dir.split("/")[-2]
 
     data_dir = os.path.join(args.datasets_dir, subject_name, dataset_name, "test")
-
+    
+    save_dir = args.model_dir.split("/")[:-1]
+    save_dir = '/'.join(save_dir)
+    logger = TrainLogger(log_dir=save_dir, prefix=f"score_{original_modal}_{target_modal}")
+    
     test_dataset = MRIDataset(data_dir, original_modal, target_modal)
     test_loader = DataLoader(dataset=test_dataset, num_workers=4, pin_memory=True, batch_size=args.batch_size, shuffle=False)
 
@@ -156,10 +161,10 @@ if __name__ == "__main__":
             total_lpips += lpips_value
             count += 1
 
-            print(f"PSNR: {psnr_value:.2f} dB")
-            print(f"SSIM: {ssim_value:.4f}")
-            print(f"MAE: {mae_value:.4f}")
-            print(f"LPIPS: {lpips_value:.4f}")
+            # print(f"PSNR: {psnr_value:.2f} dB")
+            # print(f"SSIM: {ssim_value:.4f}")
+            # print(f"MAE: {mae_value:.4f}")
+            # print(f"LPIPS: {lpips_value:.4f}")
 
     # Compute average metrics
     avg_psnr = total_psnr / count
@@ -168,8 +173,8 @@ if __name__ == "__main__":
     avg_lpips = total_lpips / count
 
     # Print results
-    print(f"Average PSNR: {avg_psnr:.2f} dB")
-    print(f"Average SSIM: {avg_ssim:.4f}")
-    print(f"Average MAE: {avg_mae:.6f}")
-    print(f"Average LPIPS: {avg_lpips:.4f}")
+    logger.log(f"Average PSNR: {avg_psnr:.2f} dB")
+    logger.log(f"Average SSIM: {avg_ssim:.4f}")
+    logger.log(f"Average MAE: {avg_mae:.6f}")
+    logger.log(f"Average LPIPS: {avg_lpips:.4f}")
         

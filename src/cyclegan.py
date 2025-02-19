@@ -4,6 +4,10 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch.optim as optim
+from torch.utils.data import DataLoader
+from .utils import MRIDataset
+import argparse
+from .logger import TrainLogger
 
 
 class ResidualBlock(nn.Module):
@@ -101,10 +105,6 @@ class Discriminator(nn.Module):
 
 
 if __name__ == "__main__":
-    from torch.utils.data import DataLoader
-    from .utils import MRIDataset
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--device_num", type=str, default="1")
     parser.add_argument("--data_dir", type=str, default="/data/datasets/spine/gtu/train")
@@ -119,6 +119,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model_type = "cyclegan"
+    subject_name = args.data_dir.split('/')[-3]
+    dataset_name = args.data_dir.split('/')[-2]
+
+    save_dir = os.path.join(args.save_dir, model_type, subject_name, dataset_name)
+    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
+        os.makedirs(save_dir, exist_ok=True)
+
+    logger = TrainLogger(log_dir=save_dir, prefix=f"train_{args.original_modal}_{args.target_modal}")
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device_num
 
@@ -238,19 +246,13 @@ if __name__ == "__main__":
             d_B_optimizer.step()
 
         # Print Progress
-        print(f"Epoch [{epoch+1}/{num_epochs}] | G Loss: {loss_G.item():.4f} | D_A Loss: {loss_D_A.item():.4f} | D_B Loss: {loss_D_B.item():.4f}")
+        logger.log(f"Epoch [{epoch+1}/{num_epochs}] | G Loss: {loss_G.item():.4f} | D_A Loss: {loss_D_A.item():.4f} | D_B Loss: {loss_D_B.item():.4f}")
 
         # Update Learning Rate
         g_scheduler.step()
         f_scheduler.step()
         d_A_scheduler.step()
         d_B_scheduler.step()
-
-    subject_name = args.data_dir.split('/')[-3]
-    dataset_name = args.data_dir.split('/')[-2]
-
-    if not os.path.exists(os.path.join(args.save_dir, dataset_name)):
-        os.makedirs(os.path.join(args.save_dir, model_type, subject_name, dataset_name), exist_ok=True)
 
     # save model
     torch.save(G.state_dict(), os.path.join(args.save_dir, model_type, subject_name, dataset_name, f'G_{args.original_modal}_{args.target_modal}.pth'))
